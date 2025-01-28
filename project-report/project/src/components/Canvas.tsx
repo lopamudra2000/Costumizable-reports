@@ -16,12 +16,6 @@ const GRID_COLUMNS = 12;
 const GRID_GAP = 16; // pixels
 const MIN_COLUMN_WIDTH = 6; // minimum columns an item can occupy
 
-interface DraggableItemProps {
-  item: CanvasItemType;
-  children: React.ReactNode;
-  gridColumnWidth: number;
-}
-
 function DraggableItem({ item, children, gridColumnWidth }: DraggableItemProps) {
   const {
     attributes,
@@ -61,6 +55,9 @@ function Canvas() {
 
   const containerRef = React.useRef<HTMLDivElement>(null);
   const [gridColumnWidth, setGridColumnWidth] = React.useState(0);
+  const canvasItems = useStore((state) => state.canvasItems);
+  const setSelectedItem = useStore((state) => state.setSelectedItem);
+  const updateCanvasItem = useStore((state) => state.updateCanvasItem);
 
   React.useEffect(() => {
     if (containerRef.current) {
@@ -69,9 +66,156 @@ function Canvas() {
     }
   }, []);
 
-  const canvasItems = useStore((state) => state.canvasItems);
-  const setSelectedItem = useStore((state) => state.setSelectedItem);
-  const updateCanvasItem = useStore((state) => state.updateCanvasItem);
+  const exportToPDF = async () => {
+    if (!containerRef.current) return;
+
+    const pdf = new jsPDF('l', 'mm', 'a4');
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    const margin = 10;
+    const disclaimerHeight = 20; // Reserve space for disclaimers at bottom
+
+    // Add report title
+    pdf.setFontSize(20);
+    pdf.text('Dynamic Report Dashboard', pageWidth / 2, margin, { align: 'center' });
+    pdf.setFontSize(12);
+
+    // Calculate grid dimensions for PDF
+    const availableWidth = pageWidth - (margin * 2);
+    const pdfGridColumnWidth = availableWidth / GRID_COLUMNS;
+    
+    // Group items by row and sort by column within each row
+    const rowGroups = canvasItems.reduce((groups: { [key: number]: CanvasItemType[] }, item) => {
+      const row = item.position.row;
+      if (!groups[row]) groups[row] = [];
+      groups[row].push(item);
+      // Sort items within each row by column position
+      groups[row].sort((a, b) => a.position.column - b.position.column);
+      return groups;
+    }, {});
+
+    let yOffset = margin + 15;
+    let currentPage = 1;
+    let currentPageDisclaimers: { type: string; title: string }[] = [];
+
+    // Process each row
+    for (const row of Object.keys(rowGroups).map(Number).sort((a, b) => a - b)) {
+      const rowItems = rowGroups[row];
+      let maxRowHeight = 0;
+
+      // First pass: capture all items in the row and determine max height
+      const rowCaptures = await Promise.all(rowItems.map(async (item) => {
+        const itemContainer = document.getElementById(`exhibit-${item.id}`);
+        if (!itemContainer) return null;
+
+        const canvas = await html2canvas(itemContainer, {
+          scale: 2,
+          backgroundColor: null,
+        });
+
+        // Calculate width based on grid columns
+        const itemWidth = pdfGridColumnWidth * item.position.width;
+        const itemHeight = (canvas.height * itemWidth) / canvas.width;
+        maxRowHeight = Math.max(maxRowHeight, itemHeight);
+
+        return {
+          canvas,
+          item,
+          width: itemWidth,
+          height: itemHeight,
+        };
+      }));
+
+      // Check if we need a new page
+      if (yOffset + maxRowHeight + disclaimerHeight > pageHeight) {
+        // Add disclaimers before creating new page
+        if (currentPageDisclaimers.length > 0) {
+          addDisclaimersToPage(pdf, currentPageDisclaimers, pageHeight, margin, pageWidth);
+        }
+        
+        pdf.addPage('l');
+        currentPage++;
+        yOffset = margin + 15;
+        currentPageDisclaimers = [];
+      }
+
+      // Second pass: render items in the row maintaining horizontal alignment
+      for (const capture of rowCaptures) {
+        if (!capture) continue;
+
+        const { canvas, item, width, height } = capture;
+        // Calculate x position based on grid column
+        const xPos = margin + (item.position.column * pdfGridColumnWidth);
+
+        // Add title
+        pdf.setFontSize(10);
+        pdf.text(item.title || `${item.type.charAt(0).toUpperCase() + item.type.slice(1)} Report`, 
+          xPos, yOffset);
+
+        // Add the exhibit
+        const imgData = canvas.toDataURL('image/png');
+        pdf.addImage(imgData, 'PNG', xPos, yOffset + 5, width, height);
+
+        // Collect disclaimer for this item
+        currentPageDisclaimers.push({
+          type: item.type,
+          title: item.title || `${item.type.charAt(0).toUpperCase() + item.type.slice(1)} Report`
+        });
+      }
+
+      yOffset += maxRowHeight + 15; // Reduced spacing since disclaimers are at bottom
+    }
+
+    // Add disclaimers for the last page
+    if (currentPageDisclaimers.length > 0) {
+      addDisclaimersToPage(pdf, currentPageDisclaimers, pageHeight, margin, pageWidth);
+    }
+
+    pdf.save('dashboard-report.pdf');
+  };
+
+  // Helper function to add disclaimers at the bottom of a page
+  const addDisclaimersToPage = (
+    pdf: jsPDF,
+    pageDisclaimers: { type: string; title: string }[],
+    pageHeight: number,
+    margin: number,
+    pageWidth: number
+  ) => {
+    pdf.setFontSize(8);
+    pdf.setTextColor(128);
+
+    // Add a line above disclaimers
+    const disclaimerY = pageHeight - margin - 25;
+    pdf.setDrawColor(200);
+    pdf.line(margin, disclaimerY, pageWidth - margin, disclaimerY);
+
+    // Add "Disclaimers:" header
+    pdf.setFontSize(9);
+    pdf.setTextColor(100);
+    pdf.text('Disclaimers:', margin, disclaimerY + 5);
+
+    // Add each disclaimer
+    pdf.setFontSize(8);
+    let xOffset = margin;
+    const maxWidth = (pageWidth - (margin * 2)) / 2; // Split into two columns
+
+    pageDisclaimers.forEach((item, index) => {
+      const disclaimer = disclaimers[item.type as keyof typeof disclaimers] || '';
+      const disclaimerText = `${item.title}: ${disclaimer}`;
+      
+      // Move to second column after half the items
+      if (index === Math.ceil(pageDisclaimers.length / 2)) {
+        xOffset = pageWidth / 2;
+      }
+
+      pdf.text(disclaimerText, xOffset, disclaimerY + 5 + ((index % Math.ceil(pageDisclaimers.length / 2)) + 1) * 4, {
+        maxWidth: maxWidth
+      });
+    });
+
+    pdf.setTextColor(0);
+  };
 
   const handleResize = (item: CanvasItemType, newWidth: number) => {
     const newGridWidth = Math.max(
@@ -88,65 +232,6 @@ function Canvas() {
         width: newGridWidth
       }
     });
-  };
-
-  const exportToPDF = async () => {
-    if (!containerRef.current) return;
-
-    const pdf = new jsPDF('p', 'mm', 'a4');
-    const pageWidth = pdf.internal.pageSize.getWidth();
-    const pageHeight = pdf.internal.pageSize.getHeight();
-    const margin = 10;
-
-    // Add report title
-    pdf.setFontSize(20);
-    pdf.text('Dynamic Report Dashboard', pageWidth / 2, margin, { align: 'center' });
-    pdf.setFontSize(12);
-    
-    let yOffset = margin + 10;
-
-    for (const item of canvasItems) {
-      const itemContainer = document.getElementById(`exhibit-${item.id}`);
-      if (!itemContainer) continue;
-
-      // Add new page if needed
-      if (yOffset > pageHeight - 60) {
-        pdf.addPage();
-        yOffset = margin;
-      }
-
-      // Add exhibit title
-      pdf.setFontSize(14);
-      pdf.text(item.title || `${item.type.charAt(0).toUpperCase() + item.type.slice(1)} Report`, margin, yOffset);
-      yOffset += 10;
-
-      // Capture the exhibit
-      const canvas = await html2canvas(itemContainer, {
-        scale: 2,
-        backgroundColor: null,
-      });
-
-      // Calculate dimensions to fit within page width while maintaining aspect ratio
-      const imgWidth = pageWidth - (margin * 2);
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-
-      // Add the exhibit image
-      const imgData = canvas.toDataURL('image/png');
-      pdf.addImage(imgData, 'PNG', margin, yOffset, imgWidth, imgHeight);
-      yOffset += imgHeight + 5;
-
-      // Add disclaimer
-      pdf.setFontSize(8);
-      pdf.setTextColor(128);
-      const disclaimer = disclaimers[item.type as keyof typeof disclaimers] || '';
-      pdf.text(disclaimer, margin, yOffset, { maxWidth: pageWidth - (margin * 2) });
-      yOffset += 15;
-
-      pdf.setTextColor(0);
-    }
-
-    // Save the PDF
-    pdf.save('dashboard-report.pdf');
   };
 
   const renderTableComponent = (data: any) => (
