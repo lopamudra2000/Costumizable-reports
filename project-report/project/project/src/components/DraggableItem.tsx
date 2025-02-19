@@ -1,20 +1,22 @@
 import React from 'react';
 import { useDrag } from 'react-dnd';
-import { Paper, Typography } from '@mui/material';
+import { Paper, Typography, Box, Chip } from '@mui/material';
+import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
 
 interface DraggableItemProps {
   id: string;
   content: string;
+  exhibitLayout: 'QUAD' | 'FULLPAGE';
 }
 
-export const DraggableItem: React.FC<DraggableItemProps> = ({ id, content }) => {
+export const DraggableItem: React.FC<DraggableItemProps> = ({ id, content, exhibitLayout }) => {
   const [{ isDragging }, drag] = useDrag(() => ({
     type: 'ITEM',
-    item: { id, content },
+    item: { id, content, exhibitLayout },
     collect: (monitor) => ({
       isDragging: !!monitor.isDragging(),
     }),
-  }), [id, content]); // Add dependencies to ensure drag source updates
+  }), [id, content, exhibitLayout]);
 
   return (
     <Paper
@@ -33,7 +35,18 @@ export const DraggableItem: React.FC<DraggableItemProps> = ({ id, content }) => 
         border: isDragging ? '2px dashed grey' : 'none',
       }}
     >
-      <Typography>{content}</Typography>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <DragIndicatorIcon sx={{ color: 'grey.500' }} />
+        <Box sx={{ flex: 1 }}>
+          <Typography>{content}</Typography>
+          <Chip
+            label={exhibitLayout}
+            size="small"
+            color={exhibitLayout === 'FULLPAGE' ? 'primary' : 'default'}
+            sx={{ mt: 1 }}
+          />
+        </Box>
+      </Box>
     </Paper>
   );
 };

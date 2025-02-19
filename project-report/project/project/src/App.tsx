@@ -11,6 +11,7 @@ import 'react-resizable/css/styles.css';
 interface Item {
   id: string;
   content: string;
+  exhibitLayout: 'QUAD' | 'FULLPAGE';
 }
 
 interface LayoutItem {
@@ -25,18 +26,19 @@ interface LayoutItem {
 interface PageData {
   quadrantItems: Record<string, Item[]>;
   layout: LayoutItem[];
+  isFullPage: boolean;
 }
 
 function App() {
   const [sourceItems, setSourceItems] = useState<Item[]>([
-    { id: '1', content: 'Item 1' },
-    { id: '2', content: 'Item 2' },
-    { id: '3', content: 'Item 3' },
-    { id: '4', content: 'Item 4' },
-    { id: '5', content: 'Item 5' },
-    { id: '6', content: 'Item 6' },
-    { id: '7', content: 'Item 7' },
-    { id: '8', content: 'Item 8' },
+    { id: '1', content: 'Item 1', exhibitLayout: 'QUAD' },
+    { id: '2', content: 'Item 2', exhibitLayout: 'QUAD' },
+    { id: '3', content: 'Item 3', exhibitLayout: 'FULLPAGE' },
+    { id: '4', content: 'Item 4', exhibitLayout: 'QUAD' },
+    { id: '5', content: 'Item 5', exhibitLayout: 'FULLPAGE' },
+    { id: '6', content: 'Item 6', exhibitLayout: 'QUAD' },
+    { id: '7', content: 'Item 7', exhibitLayout: 'QUAD' },
+    { id: '8', content: 'Item 8', exhibitLayout: 'QUAD' },
   ]);
 
   const [currentPage, setCurrentPage] = useState(0);
@@ -52,40 +54,64 @@ function App() {
       { i: 'quad2', x: 6, y: 0, w: 6, h: 6, static: true },
       { i: 'quad3', x: 0, y: 6, w: 6, h: 6, static: true },
       { i: 'quad4', x: 6, y: 6, w: 6, h: 6, static: true },
-    ]
+    ],
+    isFullPage: false
   }]);
 
   const [summary, setSummary] = useState<string>('');
 
+  const createQuadPage = (): PageData => ({
+    quadrantItems: {
+      'quad1': [],
+      'quad2': [],
+      'quad3': [],
+      'quad4': [],
+    },
+    layout: [
+      { i: 'quad1', x: 0, y: 0, w: 6, h: 6, static: true },
+      { i: 'quad2', x: 6, y: 0, w: 6, h: 6, static: true },
+      { i: 'quad3', x: 0, y: 6, w: 6, h: 6, static: true },
+      { i: 'quad4', x: 6, y: 6, w: 6, h: 6, static: true },
+    ],
+    isFullPage: false
+  });
+
+  const createFullPage = (item: Item): PageData => ({
+    quadrantItems: {
+      'full': [item]
+    },
+    layout: [
+      { i: 'full', x: 0, y: 0, w: 12, h: 12, static: true }
+    ],
+    isFullPage: true
+  });
+
   const isCurrentPageFull = () => {
     const currentPageData = pages[currentPage];
+    if (currentPageData.isFullPage) {
+      return currentPageData.quadrantItems['full'].length > 0;
+    }
     return Object.values(currentPageData.quadrantItems).every(items => items.length > 0);
   };
 
   const addNewPage = () => {
-    setPages(prev => [...prev, {
-      quadrantItems: {
-        'quad1': [],
-        'quad2': [],
-        'quad3': [],
-        'quad4': [],
-      },
-      layout: [
-        { i: 'quad1', x: 0, y: 0, w: 6, h: 6, static: true },
-        { i: 'quad2', x: 6, y: 0, w: 6, h: 6, static: true },
-        { i: 'quad3', x: 0, y: 6, w: 6, h: 6, static: true },
-        { i: 'quad4', x: 6, y: 6, w: 6, h: 6, static: true },
-      ]
-    }]);
+    setPages(prev => [...prev, createQuadPage()]);
     setCurrentPage(prev => prev + 1);
   };
 
   const handleDrop = React.useCallback((item: Item, quadrantId: string) => {
+    if (item.exhibitLayout === 'FULLPAGE') {
+      // Create a new full page for this item
+      setPages(prev => [...prev, createFullPage(item)]);
+      setCurrentPage(prev => prev + 1);
+      setSourceItems((prev) => prev.filter((i) => i.id !== item.id));
+      return;
+    }
+
     setPages(prev => {
       const newPages = [...prev];
       const currentQuadItems = newPages[currentPage].quadrantItems[quadrantId];
       
-      // If there's already an item in the quadrant, move it back to source items
       if (currentQuadItems.length > 0) {
         setSourceItems(prevItems => [...prevItems, ...currentQuadItems]);
       }
@@ -94,7 +120,7 @@ function App() {
         ...newPages[currentPage],
         quadrantItems: {
           ...newPages[currentPage].quadrantItems,
-          [quadrantId]: [item] // Replace existing items with the new item
+          [quadrantId]: [item]
         }
       };
       return newPages;
@@ -122,11 +148,12 @@ function App() {
     sourceQuad: string,
     targetQuad: string
   ) => {
+    if (item.exhibitLayout === 'FULLPAGE') return; // Prevent moving full page items
+
     setPages(prev => {
       const newPages = [...prev];
       const targetQuadItems = newPages[currentPage].quadrantItems[targetQuad];
       
-      // If there's already an item in the target quadrant, move it to the source quadrant
       if (targetQuadItems.length > 0) {
         newPages[currentPage] = {
           ...newPages[currentPage],
@@ -155,7 +182,8 @@ function App() {
       'quad1': 'Quadrant 1',
       'quad2': 'Quadrant 2',
       'quad3': 'Quadrant 3',
-      'quad4': 'Quadrant 4'
+      'quad4': 'Quadrant 4',
+      'full': 'Full Page'
     };
     return names[id] || id;
   };
@@ -164,22 +192,25 @@ function App() {
     let summaryText = "Layout Summary:\n\n";
     
     pages.forEach((page, pageIndex) => {
-      // Check if the page has any items
       const hasItems = Object.values(page.quadrantItems).some(items => items.length > 0);
       if (!hasItems) return;
 
       summaryText += `Page ${pageIndex + 1}:\n`;
       
-      // Process quadrants in order
-      ['quad1', 'quad2', 'quad3', 'quad4'].forEach(quadrant => {
-        const items = page.quadrantItems[quadrant];
-        if (items.length > 0) {
-          summaryText += `  ${getQuadrantName(quadrant)}:\n`;
-          items.forEach(item => {
-            summaryText += `    • ${item.content}\n`;
-          });
-        }
-      });
+      if (page.isFullPage) {
+        const fullPageItem = page.quadrantItems['full'][0];
+        summaryText += `  Full Page Item:\n    • ${fullPageItem.content}\n`;
+      } else {
+        ['quad1', 'quad2', 'quad3', 'quad4'].forEach(quadrant => {
+          const items = page.quadrantItems[quadrant];
+          if (items.length > 0) {
+            summaryText += `  ${getQuadrantName(quadrant)}:\n`;
+            items.forEach(item => {
+              summaryText += `    • ${item.content}\n`;
+            });
+          }
+        });
+      }
       summaryText += "\n";
     });
 
@@ -207,7 +238,7 @@ function App() {
           <Box sx={{ mb: 3 }}>
             {sourceItems.map((item) => (
               <Box key={item.id} sx={{ mb: 2 }}>
-                <DraggableItem id={item.id} content={item.content} />
+                <DraggableItem {...item} />
               </Box>
             ))}
           </Box>

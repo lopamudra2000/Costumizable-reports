@@ -1,14 +1,17 @@
 import React from 'react';
 import { useDrag } from 'react-dnd';
-import { Paper, Typography, IconButton, Box } from '@mui/material';
+import { Paper, Typography, IconButton, Box, Chip } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
 
+interface Item {
+  id: string;
+  content: string;
+  exhibitLayout: 'QUAD' | 'FULLPAGE';
+}
+
 interface DraggableQuadrantItemProps {
-  item: {
-    id: string;
-    content: string;
-  };
+  item: Item;
   sourceQuadrant: string;
   onDelete: () => void;
 }
@@ -32,7 +35,7 @@ export const DraggableQuadrantItem: React.FC<DraggableQuadrantItemProps> = ({
       elevation={isDragging ? 0 : 1}
       sx={{
         p: 1,
-        cursor: 'move',
+        cursor: item.exhibitLayout === 'FULLPAGE' ? 'default' : 'move',
         opacity: isDragging ? 0.5 : 1,
         transition: 'all 0.2s',
         bgcolor: 'background.paper',
@@ -47,9 +50,19 @@ export const DraggableQuadrantItem: React.FC<DraggableQuadrantItemProps> = ({
         justifyContent: 'space-between',
       }}
     >
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-        <DragIndicatorIcon sx={{ color: 'grey.500' }} />
-        <Typography>{item.content}</Typography>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1 }}>
+        {item.exhibitLayout === 'QUAD' && (
+          <DragIndicatorIcon sx={{ color: 'grey.500' }} />
+        )}
+        <Box>
+          <Typography>{item.content}</Typography>
+          <Chip
+            label={item.exhibitLayout}
+            size="small"
+            color={item.exhibitLayout === 'FULLPAGE' ? 'primary' : 'default'}
+            sx={{ mt: 1 }}
+          />
+        </Box>
       </Box>
       <IconButton
         size="small"

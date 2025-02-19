@@ -1,26 +1,32 @@
 import React from 'react';
 import { useDrop } from 'react-dnd';
-import { Box, Paper } from '@mui/material';
-import { DraggableQuadrantItem } from './DraggableQuadrantItem.tsx';
+import { Box, Paper, Typography } from '@mui/material';
+import { DraggableQuadrantItem } from './DraggableQuadrantItem';
+
+interface Item {
+  id: string;
+  content: string;
+  exhibitLayout: 'QUAD' | 'FULLPAGE';
+}
 
 interface GridQuadrantProps {
   id: string;
-  items: Array<{ id: string; content: string }>;
-  onDrop: (item: any, quadrantId: string) => void;
-  onItemDelete: (item: { id: string; content: string }) => void;
-  onItemMove: (item: { id: string; content: string }, sourceQuad: string, targetQuad: string) => void;
+  items: Item[];
+  onDrop: (item: Item, quadrantId: string) => void;
+  onItemDelete: (item: Item) => void;
+  onItemMove: (item: Item, sourceQuad: string, targetQuad: string) => void;
 }
 
-export const GridQuadrant: React.FC<GridQuadrantProps> = ({ 
-  id, 
-  items, 
-  onDrop, 
+export const GridQuadrant: React.FC<GridQuadrantProps> = ({
+  id,
+  items,
+  onDrop,
   onItemDelete,
-  onItemMove 
+  onItemMove
 }) => {
   const [{ isOver, canDrop }, drop] = useDrop(() => ({
     accept: ['ITEM', 'QUADRANT_ITEM'],
-    drop: (item: any & { sourceQuadrant?: string }) => {
+    drop: (item: Item & { sourceQuadrant?: string }) => {
       if (item.sourceQuadrant) {
         if (item.sourceQuadrant !== id) {
           onItemMove(item, item.sourceQuadrant, id);
@@ -35,13 +41,15 @@ export const GridQuadrant: React.FC<GridQuadrantProps> = ({
     }),
   }), [id, onDrop, onItemMove]);
 
+  const isFullPage = id === 'full';
+
   return (
     <Paper
       ref={drop}
       sx={{
         p: 2,
         height: '100%',
-        minHeight: 200,
+        minHeight: isFullPage ? 400 : 200,
         bgcolor: isOver ? 'primary.50' : canDrop ? 'grey.50' : 'background.paper',
         border: 2,
         borderColor: isOver 
@@ -52,6 +60,11 @@ export const GridQuadrant: React.FC<GridQuadrantProps> = ({
         transition: 'all 0.2s',
       }}
     >
+      {isFullPage && (
+        <Typography variant="h6" gutterBottom>
+          Full Page Layout
+        </Typography>
+      )}
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
         {items.map((item) => (
           <DraggableQuadrantItem
