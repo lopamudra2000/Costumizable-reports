@@ -26,7 +26,6 @@ interface LayoutItem {
 interface PageData {
   quadrantItems: Record<string, Item[]>;
   layout: LayoutItem[];
-  isFullPage: boolean;
 }
 
 function App() {
@@ -54,57 +53,76 @@ function App() {
       { i: 'quad2', x: 6, y: 0, w: 6, h: 6, static: true },
       { i: 'quad3', x: 0, y: 6, w: 6, h: 6, static: true },
       { i: 'quad4', x: 6, y: 6, w: 6, h: 6, static: true },
-    ],
-    isFullPage: false
+    ]
   }]);
 
   const [summary, setSummary] = useState<string>('');
 
-  const createQuadPage = (): PageData => ({
-    quadrantItems: {
-      'quad1': [],
-      'quad2': [],
-      'quad3': [],
-      'quad4': [],
-    },
-    layout: [
-      { i: 'quad1', x: 0, y: 0, w: 6, h: 6, static: true },
-      { i: 'quad2', x: 6, y: 0, w: 6, h: 6, static: true },
-      { i: 'quad3', x: 0, y: 6, w: 6, h: 6, static: true },
-      { i: 'quad4', x: 6, y: 6, w: 6, h: 6, static: true },
-    ],
-    isFullPage: false
-  });
-
-  const createFullPage = (item: Item): PageData => ({
-    quadrantItems: {
-      'full': [item]
-    },
-    layout: [
-      { i: 'full', x: 0, y: 0, w: 12, h: 12, static: true }
-    ],
-    isFullPage: true
-  });
-
   const isCurrentPageFull = () => {
     const currentPageData = pages[currentPage];
-    if (currentPageData.isFullPage) {
-      return currentPageData.quadrantItems['full'].length > 0;
-    }
     return Object.values(currentPageData.quadrantItems).every(items => items.length > 0);
   };
 
   const addNewPage = () => {
-    setPages(prev => [...prev, createQuadPage()]);
+    setPages(prev => [...prev, {
+      quadrantItems: {
+        'quad1': [],
+        'quad2': [],
+        'quad3': [],
+        'quad4': [],
+      },
+      layout: [
+        { i: 'quad1', x: 0, y: 0, w: 6, h: 6, static: true },
+        { i: 'quad2', x: 6, y: 0, w: 6, h: 6, static: true },
+        { i: 'quad3', x: 0, y: 6, w: 6, h: 6, static: true },
+        { i: 'quad4', x: 6, y: 6, w: 6, h: 6, static: true },
+      ]
+    }]);
     setCurrentPage(prev => prev + 1);
   };
 
-  const handleDrop = React.useCallback((item: Item, quadrantId: string) => {
+  const isQuadrantDisabled = (quadId: string) => {
+    const currentPageData = pages[currentPage];
+    
+    // Check if adjacent quadrant has a FULLPAGE item
+    if (quadId === 'quad2') {
+      const quad1Items = currentPageData.quadrantItems['quad1'];
+      return quad1Items.length > 0 && quad1Items[0].exhibitLayout === 'FULLPAGE';
+    }
+    if (quadId === 'quad4') {
+      const quad3Items = currentPageData.quadrantItems['quad3'];
+      return quad3Items.length > 0 && quad3Items[0].exhibitLayout === 'FULLPAGE';
+    }
+    
+    return false;
+  };
+
+  const canDropInQuadrant = (item: Item, quadId: string) => {
+    const currentPageData = pages[currentPage];
+
     if (item.exhibitLayout === 'FULLPAGE') {
-      // Create a new full page for this item
-      setPages(prev => [...prev, createFullPage(item)]);
-      setCurrentPage(prev => prev + 1);
-      setSourceItems((prev) => prev.filter((i) => i.id !== item.id));
+      // FULLPAGE items can only be dropped in quad1 or quad3
+      if (quadId !== 'quad1' && quadId !== 'quad3') {
+        return false;
+      }
+
+      // Check if adjacent quadrant has a QUAD item
+      if (quadId === 'quad1') {
+        const quad2Items = currentPageData.quadrantItems['quad2'];
+        return !(quad2Items.length > 0 && quad2Items[0].exhibitLayout === 'QUAD');
+      }
+      if (quadId === 'quad3') {
+        const quad4Items = currentPageData.quadrantItems['quad4'];
+        return !(quad4Items.length > 0 && quad4Items[0].exhibitLayout === 'QUAD');
+      }
+    }
+
+    // QUAD items can be dropped anywhere unless the quadrant is disabled
+    return !isQuadrantDisabled(quadId);
+  };
+
+  const handleDrop = React.useCallback((item: Item, quadrantId: string) => {
+    if (!canDropInQuadrant(item, quadrantId)) {
       return;
     }
 
@@ -148,7 +166,9 @@ function App() {
     sourceQuad: string,
     targetQuad: string
   ) => {
-    if (item.exhibitLayout === 'FULLPAGE') return; // Prevent moving full page items
+    if (!canDropInQuadrant(item, targetQuad)) {
+      return;
+    }
 
     setPages(prev => {
       const newPages = [...prev];
@@ -182,8 +202,7 @@ function App() {
       'quad1': 'Quadrant 1',
       'quad2': 'Quadrant 2',
       'quad3': 'Quadrant 3',
-      'quad4': 'Quadrant 4',
-      'full': 'Full Page'
+      'quad4': 'Quadrant 4'
     };
     return names[id] || id;
   };
@@ -197,20 +216,15 @@ function App() {
 
       summaryText += `Page ${pageIndex + 1}:\n`;
       
-      if (page.isFullPage) {
-        const fullPageItem = page.quadrantItems['full'][0];
-        summaryText += `  Full Page Item:\n    • ${fullPageItem.content}\n`;
-      } else {
-        ['quad1', 'quad2', 'quad3', 'quad4'].forEach(quadrant => {
-          const items = page.quadrantItems[quadrant];
-          if (items.length > 0) {
-            summaryText += `  ${getQuadrantName(quadrant)}:\n`;
-            items.forEach(item => {
-              summaryText += `    • ${item.content}\n`;
-            });
-          }
-        });
-      }
+      ['quad1', 'quad2', 'quad3', 'quad4'].forEach(quadrant => {
+        const items = page.quadrantItems[quadrant];
+        if (items.length > 0) {
+          summaryText += `  ${getQuadrantName(quadrant)}:\n`;
+          items.forEach(item => {
+            summaryText += `    • ${item.content} (${item.exhibitLayout})\n`;
+          });
+        }
+      });
       summaryText += "\n";
     });
 
@@ -323,6 +337,7 @@ function App() {
                     onDrop={handleDrop}
                     onItemDelete={(item) => handleItemDelete(item, l.i)}
                     onItemMove={handleItemMove}
+                    isDisabled={isQuadrantDisabled(l.i)}
                   />
                 </div>
               ))}

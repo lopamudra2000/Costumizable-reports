@@ -15,6 +15,7 @@ interface GridQuadrantProps {
   onDrop: (item: Item, quadrantId: string) => void;
   onItemDelete: (item: Item) => void;
   onItemMove: (item: Item, sourceQuad: string, targetQuad: string) => void;
+  isDisabled?: boolean;
 }
 
 export const GridQuadrant: React.FC<GridQuadrantProps> = ({
@@ -22,11 +23,15 @@ export const GridQuadrant: React.FC<GridQuadrantProps> = ({
   items,
   onDrop,
   onItemDelete,
-  onItemMove
+  onItemMove,
+  isDisabled = false
 }) => {
   const [{ isOver, canDrop }, drop] = useDrop(() => ({
     accept: ['ITEM', 'QUADRANT_ITEM'],
+    canDrop: () => !isDisabled,
     drop: (item: Item & { sourceQuadrant?: string }) => {
+      if (isDisabled) return;
+      
       if (item.sourceQuadrant) {
         if (item.sourceQuadrant !== id) {
           onItemMove(item, item.sourceQuadrant, id);
@@ -37,11 +42,9 @@ export const GridQuadrant: React.FC<GridQuadrantProps> = ({
     },
     collect: (monitor) => ({
       isOver: !!monitor.isOver(),
-      canDrop: !!monitor.canDrop(),
+      canDrop: !!monitor.canDrop() && !isDisabled,
     }),
-  }), [id, onDrop, onItemMove]);
-
-  const isFullPage = id === 'full';
+  }), [id, onDrop, onItemMove, isDisabled]);
 
   return (
     <Paper
@@ -49,22 +52,27 @@ export const GridQuadrant: React.FC<GridQuadrantProps> = ({
       sx={{
         p: 2,
         height: '100%',
-        minHeight: isFullPage ? 400 : 200,
-        bgcolor: isOver ? 'primary.50' : canDrop ? 'grey.50' : 'background.paper',
+        minHeight: 200,
+        bgcolor: isDisabled 
+          ? 'grey.300'
+          : isOver 
+            ? 'primary.50' 
+            : canDrop 
+              ? 'grey.50' 
+              : 'background.paper',
         border: 2,
-        borderColor: isOver 
-          ? 'primary.main'
-          : canDrop 
-            ? 'primary.light'
-            : 'grey.200',
+        borderColor: isDisabled
+          ? 'grey.400'
+          : isOver 
+            ? 'primary.main'
+            : canDrop 
+              ? 'primary.light'
+              : 'grey.200',
         transition: 'all 0.2s',
+        opacity: isDisabled ? 0.7 : 1,
+        pointerEvents: isDisabled ? 'none' : 'auto',
       }}
     >
-      {isFullPage && (
-        <Typography variant="h6" gutterBottom>
-          Full Page Layout
-        </Typography>
-      )}
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
         {items.map((item) => (
           <DraggableQuadrantItem
