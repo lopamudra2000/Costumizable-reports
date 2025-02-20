@@ -58,9 +58,9 @@ function App() {
 
   const [summary, setSummary] = useState<string>('');
 
-  const isCurrentPageFull = () => {
+  const hasAnyItems = () => {
     const currentPageData = pages[currentPage];
-    return Object.values(currentPageData.quadrantItems).every(items => items.length > 0);
+    return Object.values(currentPageData.quadrantItems).some(items => items.length > 0);
   };
 
   const addNewPage = () => {
@@ -141,8 +141,9 @@ function App() {
       const newPages = [...prev];
       const currentQuadItems = newPages[currentPage].quadrantItems[quadrantId];
       
+      // If quadrant already has items, don't allow drop
       if (currentQuadItems.length > 0) {
-        setSourceItems(prevItems => [...prevItems, ...currentQuadItems]);
+        return prev;
       }
       
       newPages[currentPage] = {
@@ -181,25 +182,19 @@ function App() {
       const newPages = [...prev];
       const targetQuadItems = newPages[currentPage].quadrantItems[targetQuad];
       
+      // If target quadrant has items, don't allow move
       if (targetQuadItems.length > 0) {
-        newPages[currentPage] = {
-          ...newPages[currentPage],
-          quadrantItems: {
-            ...newPages[currentPage].quadrantItems,
-            [sourceQuad]: targetQuadItems,
-            [targetQuad]: [item]
-          }
-        };
-      } else {
-        newPages[currentPage] = {
-          ...newPages[currentPage],
-          quadrantItems: {
-            ...newPages[currentPage].quadrantItems,
-            [sourceQuad]: [],
-            [targetQuad]: [item]
-          }
-        };
+        return prev;
       }
+
+      newPages[currentPage] = {
+        ...newPages[currentPage],
+        quadrantItems: {
+          ...newPages[currentPage].quadrantItems,
+          [sourceQuad]: [],
+          [targetQuad]: [item]
+        }
+      };
       return newPages;
     });
   }, [currentPage]);
@@ -312,7 +307,7 @@ function App() {
               >
                 Next Page
               </Button>
-              {isCurrentPageFull() && currentPage === pages.length - 1 && (
+              {hasAnyItems() && currentPage === pages.length - 1 && (
                 <Button
                   variant="contained"
                   onClick={addNewPage}
