@@ -137,12 +137,17 @@ function App() {
   };
 
   const handleDrop = React.useCallback((item: Item, quadrantId: string) => {
+    // Remove the item from source items first
+    setSourceItems((prev) => prev.filter((i) => i.id !== item.id));
+
     setPages(prev => {
       const newPages = [...prev];
       const currentQuadItems = newPages[currentPage].quadrantItems[quadrantId];
       
-      // If quadrant already has items, don't allow drop
+      // If quadrant already has items, return the dragged item to source
       if (currentQuadItems.length > 0) {
+        // Add the item back to source items
+        setSourceItems(prevItems => [...prevItems, item]);
         return prev;
       }
       
@@ -155,7 +160,6 @@ function App() {
       };
       return newPages;
     });
-    setSourceItems((prev) => prev.filter((i) => i.id !== item.id));
   }, [currentPage]);
 
   const handleItemDelete = React.useCallback((item: Item, quadrantId: string) => {
