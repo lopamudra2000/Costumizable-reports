@@ -16,6 +16,8 @@ interface GridQuadrantProps {
   onItemDelete: (item: Item) => void;
   onItemMove: (item: Item, sourceQuad: string, targetQuad: string) => void;
   isDisabled?: boolean;
+  canAcceptFullPage: boolean;
+  hasQuadItems: boolean;
 }
 
 export const GridQuadrant: React.FC<GridQuadrantProps> = ({
@@ -24,13 +26,32 @@ export const GridQuadrant: React.FC<GridQuadrantProps> = ({
   onDrop,
   onItemDelete,
   onItemMove,
-  isDisabled = false
+  isDisabled = false,
+  canAcceptFullPage,
+  hasQuadItems
 }) => {
   const [{ isOver, canDrop }, drop] = useDrop(() => ({
     accept: ['ITEM', 'QUADRANT_ITEM'],
-    canDrop: () => !isDisabled,
+    canDrop: (item: Item & { sourceQuadrant?: string }) => {
+      if (isDisabled) return false;
+      
+      // Prevent FULLPAGE items from being placed where QUAD items exist
+      if (item.exhibitLayout === 'FULLPAGE') {
+        if (!canAcceptFullPage || hasQuadItems) return false;
+      }
+      
+      // Prevent QUAD items from being placed where FULLPAGE items exist
+      if (item.exhibitLayout === 'QUAD') {
+        const hasFullPageItem = items.some(i => i.exhibitLayout === 'FULLPAGE');
+        if (hasFullPageItem) return false;
+      }
+      
+      return true;
+    },
     drop: (item: Item & { sourceQuadrant?: string }) => {
       if (isDisabled) return;
+      if (item.exhibitLayout === 'FULLPAGE' && (!canAcceptFullPage || hasQuadItems)) return;
+      if (item.exhibitLayout === 'QUAD' && items.some(i => i.exhibitLayout === 'FULLPAGE')) return;
       
       if (item.sourceQuadrant) {
         if (item.sourceQuadrant !== id) {
@@ -42,9 +63,9 @@ export const GridQuadrant: React.FC<GridQuadrantProps> = ({
     },
     collect: (monitor) => ({
       isOver: !!monitor.isOver(),
-      canDrop: !!monitor.canDrop() && !isDisabled,
+      canDrop: !!monitor.canDrop(),
     }),
-  }), [id, onDrop, onItemMove, isDisabled]);
+  }), [id, onDrop, onItemMove, isDisabled, canAcceptFullPage, hasQuadItems, items]);
 
   return (
     <Paper
@@ -56,7 +77,7 @@ export const GridQuadrant: React.FC<GridQuadrantProps> = ({
         bgcolor: isDisabled 
           ? 'grey.300'
           : isOver 
-            ? 'primary.50' 
+            ? canDrop ? 'primary.50' : 'error.100'
             : canDrop 
               ? 'grey.50' 
               : 'background.paper',
@@ -64,7 +85,7 @@ export const GridQuadrant: React.FC<GridQuadrantProps> = ({
         borderColor: isDisabled
           ? 'grey.400'
           : isOver 
-            ? 'primary.main'
+            ? canDrop ? 'primary.main' : 'error.main'
             : canDrop 
               ? 'primary.light'
               : 'grey.200',

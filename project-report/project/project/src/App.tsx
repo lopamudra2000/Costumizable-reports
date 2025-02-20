@@ -81,6 +81,23 @@ function App() {
     setCurrentPage(prev => prev + 1);
   };
 
+  const hasQuadItems = (quadId: string): boolean => {
+    const currentPageData = pages[currentPage];
+    const adjacentQuads = [];
+    
+    if (quadId === 'quad1' || quadId === 'quad2') {
+      adjacentQuads.push('quad1', 'quad2');
+    }
+    if (quadId === 'quad3' || quadId === 'quad4') {
+      adjacentQuads.push('quad3', 'quad4');
+    }
+    
+    return adjacentQuads.some(quad => {
+      const items = currentPageData.quadrantItems[quad];
+      return items.length > 0 && items[0].exhibitLayout === 'QUAD';
+    });
+  };
+
   const isQuadrantDisabled = (quadId: string) => {
     const currentPageData = pages[currentPage];
     
@@ -97,35 +114,29 @@ function App() {
     return false;
   };
 
-  const canDropInQuadrant = (item: Item, quadId: string) => {
+  const canAcceptFullPage = (quadId: string): boolean => {
     const currentPageData = pages[currentPage];
 
-    if (item.exhibitLayout === 'FULLPAGE') {
-      // FULLPAGE items can only be dropped in quad1 or quad3
-      if (quadId !== 'quad1' && quadId !== 'quad3') {
-        return false;
-      }
-
-      // Check if adjacent quadrant has a QUAD item
-      if (quadId === 'quad1') {
-        const quad2Items = currentPageData.quadrantItems['quad2'];
-        return !(quad2Items.length > 0 && quad2Items[0].exhibitLayout === 'QUAD');
-      }
-      if (quadId === 'quad3') {
-        const quad4Items = currentPageData.quadrantItems['quad4'];
-        return !(quad4Items.length > 0 && quad4Items[0].exhibitLayout === 'QUAD');
-      }
+    // Only quadrants 1 and 3 can accept FULLPAGE items
+    if (quadId !== 'quad1' && quadId !== 'quad3') {
+      return false;
     }
 
-    // QUAD items can be dropped anywhere unless the quadrant is disabled
-    return !isQuadrantDisabled(quadId);
+    // Check if the adjacent quadrant has a QUAD item
+    if (quadId === 'quad1') {
+      const quad2Items = currentPageData.quadrantItems['quad2'];
+      return !(quad2Items.length > 0);
+    }
+
+    if (quadId === 'quad3') {
+      const quad4Items = currentPageData.quadrantItems['quad4'];
+      return !(quad4Items.length > 0);
+    }
+
+    return false;
   };
 
   const handleDrop = React.useCallback((item: Item, quadrantId: string) => {
-    if (!canDropInQuadrant(item, quadrantId)) {
-      return;
-    }
-
     setPages(prev => {
       const newPages = [...prev];
       const currentQuadItems = newPages[currentPage].quadrantItems[quadrantId];
@@ -166,10 +177,6 @@ function App() {
     sourceQuad: string,
     targetQuad: string
   ) => {
-    if (!canDropInQuadrant(item, targetQuad)) {
-      return;
-    }
-
     setPages(prev => {
       const newPages = [...prev];
       const targetQuadItems = newPages[currentPage].quadrantItems[targetQuad];
@@ -338,6 +345,8 @@ function App() {
                     onItemDelete={(item) => handleItemDelete(item, l.i)}
                     onItemMove={handleItemMove}
                     isDisabled={isQuadrantDisabled(l.i)}
+                    canAcceptFullPage={canAcceptFullPage(l.i)}
+                    hasQuadItems={hasQuadItems(l.i)}
                   />
                 </div>
               ))}
